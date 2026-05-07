@@ -149,11 +149,13 @@ class XianyuLiveClient:
                 if now - self.last_heartbeat_time >= self.heartbeat_interval:
                     await self.send_heartbeat(ws)
                 if (now - self.last_heartbeat_response) > (self.heartbeat_interval + self.heartbeat_timeout):
-                    logger.warning("心跳超时，连接可能已断开")
+                    logger.warning("心跳超时，主动关闭连接")
+                    if self.ws:
+                        await self.ws.close()   # 触发重连
                     break
                 await asyncio.sleep(1)
             except Exception as e:
-                logger.error(f"心跳循环错误: {e}")
+                logger.error(f"心跳循环异常: {e}")
                 break
 
     async def run(self):

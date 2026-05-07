@@ -18,6 +18,7 @@ class MessageHandler:
         self.manual_control = ManualControl(settings.manual_mode_timeout)
         self.toggle_keywords = settings.toggle_keywords
         self.message_expire_time = settings.message_expire_time
+        self.pending_replies = {}   # key: chat_id, value: (to_id, reply_text)
 
     async def handle(self, msg: dict, ws, myid: str):
         if not self._is_chat_message(msg):
@@ -34,7 +35,15 @@ class MessageHandler:
         chat_id = msg["1"]["2"].split('@')[0]
         if not item_id:
             return
-
+        # ---- 在正常回复前，先尝试发送该会话之前未发出去的消息 ----
+        if chat_id in self.pending_replies:
+            to_id, old_reply = self.pending_replies.pop(chat_id)
+            logger.info(f"补发会话 {chat_id} 的未发送回复: {old_reply}")
+            try:
+                await self._send_message(ws, chat_id, to_id, myid, old_reply)
+            except Exception:
+                # 如果仍然发送失败，重新放回队列
+                self.pending_replies[chat_id] = (to_id, old_reply)
         # 卖家自己的消息
         if send_user_id == myid:
             if send_message.strip() in self.toggle_keywords:
@@ -90,7 +99,13 @@ class MessageHandler:
             delay = min(len(reply) * random.uniform(0.1, 0.3), 10.0)
             await asyncio.sleep(delay)
 
-        await self._send_message(ws, chat_id, send_user_id, myid, reply)
+        # await self._send_message(ws, chat_id, send_user_id, myid, reply)
+        # 在发送回复时，如果失败则存入队列
+        try:
+            await self._send_message(ws, chat_id, send_user_id, myid, reply)
+        except Exception as e:
+            logger.error(f"发送消息失败，存入待发送队列: {e}")
+            self.pending_replies[chat_id] = (send_user_id, reply)
 
     async def _send_message(self, ws, chat_id, to_id, myid, text):
         import json, base64
