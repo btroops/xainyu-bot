@@ -1,0 +1,9 @@
+/build
+# 忽略 所有目录下的 __pycache__ 文件夹
+**/__pycache__/
+
+# 可选：同时忽略Python编译的缓存文件（配套清理）
+*.pyc
+*.pyo
+*.pyd
+.env*
