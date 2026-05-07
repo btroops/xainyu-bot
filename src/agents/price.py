@@ -5,7 +5,7 @@ from src.agents.base import load_prompt
 
 def build_price_chain(memory, item_desc, model):
     def dynamic_run(inputs: dict):
-        bargain_count = getattr(memory, "bargain_count", 0)
+        bargain_count = inputs.get("bargain_count", 0)
         temp = min(0.3 + bargain_count * 0.15, 0.9)
         dyn_model = ChatOpenAI(
             model=model.model_name,
@@ -14,14 +14,14 @@ def build_price_chain(memory, item_desc, model):
             temperature=temp,
         )
         prompt = ChatPromptTemplate.from_messages([
-            ("system", load_prompt("price_prompt").format(
-                item_desc=item_desc, bargain_count=bargain_count)),
-            ("placeholder", "{history}"),
+            ("system", load_prompt("price_prompt")),   # 模板内包含 {history} {item_desc} {bargain_count}
             ("human", "{input}")
         ])
         formatted = prompt.invoke({
             "input": inputs["input"],
-            "history": inputs.get("history", [])
+            "history": inputs.get("history", ""),
+            "item_desc": item_desc,                  # 也可从 inputs 取，统一使用外层传入
+            "bargain_count": bargain_count
         })
         resp = dyn_model.invoke(formatted)
         return {"intent": "price", "reply": resp.content}

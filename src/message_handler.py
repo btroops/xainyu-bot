@@ -54,8 +54,8 @@ class MessageHandler:
             return
 
         # 获取商品描述
-        item_desc = get_item_desc(item_id, self.api, self.settings.db_path)
-
+        # item_desc = get_item_desc(item_id, self.api, self.settings.db_path)
+        item_desc = await asyncio.to_thread(get_item_desc, item_id, self.api, self.settings.db_path)
         # 获取记忆和议价次数
         mem = get_memory(chat_id, self.settings.db_path)
         bargain_count = get_bargain_count_db(chat_id, self.settings.db_path)
@@ -63,9 +63,13 @@ class MessageHandler:
 
         # 构建链
         chain = build_reply_chain(mem, item_desc, self.llm)
-        inputs = {"input": send_message}
+        # 在 handle 中构建 inputs
+        inputs = {
+            "input": send_message,
+            "bargain_count": bargain_count,
+        }
         memory_vars = mem.load_memory_variables(inputs)
-        inputs.update(memory_vars)
+        inputs.update(memory_vars)          # inputs 现在包含 "history" (字符串) 和 "bargain_count"
 
         result = await chain.ainvoke(inputs)
 

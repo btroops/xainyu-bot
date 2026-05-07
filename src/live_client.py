@@ -27,7 +27,7 @@ class XianyuLiveClient:
 
     async def refresh_token(self):
         logger.info("刷新 token ...")
-        res = self.api.get_token(self.device_id)
+        res = await asyncio.to_thread(self.api.get_token, self.device_id)
         if 'data' in res and 'accessToken' in res['data']:
             self.current_token = res['data']['accessToken']
             self.last_token_refresh_time = time.time()

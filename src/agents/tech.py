@@ -13,13 +13,13 @@ def build_tech_chain(memory, item_desc, model):
     )
     def tech_run(inputs: dict):
         prompt = ChatPromptTemplate.from_messages([
-            ("system", load_prompt("tech_prompt").format(item_desc=item_desc)),
-            ("placeholder", "{history}"),
+            ("system", load_prompt("tech_prompt")),   # 模板包含 {history} {item_desc}
             ("human", "{input}")
         ])
         formatted = prompt.invoke({
             "input": inputs["input"],
-            "history": inputs.get("history", [])
+            "history": inputs.get("history", ""),
+            "item_desc": item_desc
         })
         resp = search_model.invoke(formatted)
         return {"intent": "tech", "reply": resp.content}
