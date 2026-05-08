@@ -7,3 +7,5 @@
 *.pyo
 *.pyd
 .env*
+xianyu_bot.egg*
+test
