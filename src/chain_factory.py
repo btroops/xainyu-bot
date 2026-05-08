@@ -3,62 +3,56 @@ from src.agents.classifier import build_classify_chain
 from src.agents.price import build_price_chain
 from src.agents.tech import build_tech_chain
 from src.agents.default import build_default_chain
-from langchain_core.runnables import RunnableBranch, RunnableLambda
+
+# ===================== 优化1：全局缓存子链（只初始化一次） =====================
+# 缓存：避免重复创建子链，大幅提速
+_CACHED_CHAINS = {}
 
 def build_reply_chain(memory, item_desc, model):
-    classify_chain = build_classify_chain(model)
-    price_chain = build_price_chain(memory, item_desc, model)
-    tech_chain = build_tech_chain(memory, item_desc, model)
-    default_chain = build_default_chain(memory, item_desc, model)
+    global _CACHED_CHAINS
+    # 用模型+商品描述作为缓存key，不变则不重建
+    cache_key = (id(model), hash(item_desc))
+    
+    if cache_key not in _CACHED_CHAINS:
+        # 只初始化一次子链
+        _CACHED_CHAINS[cache_key] = {
+            "classify": build_classify_chain(model),
+            "price": build_price_chain(memory, item_desc, model),
+            "tech": build_tech_chain(memory, item_desc, model),
+            "default": build_default_chain(memory, item_desc, model)
+        }
+    
+    chains = _CACHED_CHAINS[cache_key]
+    classify_chain = chains["classify"]
+    price_chain = chains["price"]
+    tech_chain = chains["tech"]
+    default_chain = chains["default"]
 
-    # -------------------------- 分支函数：带打印日志 --------------------------
-    def no_reply_branch(x):
-        print("\n" + "="*50)
-        print("📌 分支选择：无需回复 (no_reply)")
-        print("="*50)
-        return {"intent": "no_reply", "reply": "-"}
-
-    # -------------------------- 核心处理函数：带打印日志 --------------------------
-    def classify_and_pass(x):
-        print("\n" + "="*50)
-        print("📝 步骤2：意图分类处理")
-        print(f"分类前输入: {x}")
-        
-        # 执行意图分类
-        intent = classify_chain.invoke(x)
-        x["intent"] = intent
-        
-        print(f"✅ 识别用户意图: {intent}")
-        print(f"分类后输出: {x}")
-        print("="*50)
-        return x
-
+    # ===================== 优化2：删除所有print，关闭IO耗时 =====================
+    # 清理商品描述注入函数
     def inject_item_desc(x):
-        print("\n" + "="*50)
-        print("📝 步骤1：注入商品描述信息")
-        print(f"注入前输入: {x}")
-        
-        # 注入商品描述
         x["item_desc"] = item_desc
-        
-        print(f"注入后输出: {x}")
-        print("="*50)
         return x
 
-    # 定义分支路由
+    # 清理分类处理函数
+    def classify_and_pass(x):
+        # 原生调用分类链，无嵌套阻塞
+        x["intent"] = classify_chain.invoke(x)
+        return x
+
+    # ===================== 优化3：分支直接用子链，移除手动.invoke() =====================
     branch = RunnableBranch(
-        (lambda x: x.get("intent") == "no_reply", RunnableLambda(no_reply_branch)),
-        (lambda x: x.get("intent") == "price", RunnableLambda(lambda x: (print("\n📌 分支选择：价格咨询 (price)"), price_chain.invoke(x))[1])),
-        (lambda x: x.get("intent") == "tech", RunnableLambda(lambda x: (print("\n📌 分支选择：技术咨询 (tech)"), tech_chain.invoke(x))[1])),
-        RunnableLambda(lambda x: (print("\n📌 分支选择：默认回复 (default)"), default_chain.invoke(x))[1])
+        (lambda x: x.get("intent") == "no_reply", RunnableLambda(lambda _: {"intent": "no_reply", "reply": "-"})),
+        (lambda x: x.get("intent") == "price", price_chain),  # 直接接子链！核心提速
+        (lambda x: x.get("intent") == "tech", tech_chain),    # 直接接子链！
+        default_chain                                         # 直接接子链！
     )
 
-    # 组装完整链条
+    # 原生链式组合，LangChain自动优化调度
     chain = (
         RunnableLambda(inject_item_desc)
         | RunnableLambda(classify_and_pass)
         | branch
     )
     
-    print("\n✅ 回复链构建完成！准备接收用户消息...")
     return chain
