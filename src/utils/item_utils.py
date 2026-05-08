@@ -35,11 +35,12 @@ def build_item_description(item_data: dict) -> str:
     return json.dumps(summary, ensure_ascii=False)
 
 def init_db(db_path: str):
-    """创建数据库目录和必要表（items, bargain_counts）"""
     db_dir = os.path.dirname(db_path)
     if db_dir and not os.path.exists(db_dir):
         os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(db_path)
+    # 开启 WAL 模式，提升并发性能
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS items (
             item_id TEXT PRIMARY KEY,
@@ -63,7 +64,6 @@ def get_item_desc(item_id: str, api, db_path: str) -> str:
     if row:
         conn.close()
         return build_item_description(json.loads(row[0]))
-    # 从 API 获取
     result = api.get_item_info(item_id)
     if 'data' in result and 'itemDO' in result['data']:
         item_data = result['data']['itemDO']
