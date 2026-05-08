@@ -20,7 +20,7 @@ def build_price_chain(memory, item_desc, model):
         formatted = prompt.invoke({
             "input": inputs["input"],
             "history": inputs.get("history", ""),
-            "item_desc": item_desc,                  # 也可从 inputs 取，统一使用外层传入
+            "item_desc": item_desc,                  
             "bargain_count": bargain_count
         })
         resp = dyn_model.invoke(formatted)
