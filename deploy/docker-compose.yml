@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  xianyu-bot:
+    image: xianyu-bot:latest
+    container_name: xianyu-bot
+    restart: unless-stopped
+    network_mode: host
+
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./data:/app/data
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
